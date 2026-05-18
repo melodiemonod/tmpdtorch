@@ -1,11 +1,7 @@
 conditioning:
   method: ps
   params:
-    scale: 1.0
-
-data:
-  name: ffhq
-  root: ./data/samples/
+    scale: 0.3
 
 measurement:
   operator:

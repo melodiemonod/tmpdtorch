@@ -1,18 +1,8 @@
-dpsconditioning:
+conditioning:
   method: ps
   params:
-    scale: 1.0
-
-tmpdconditioning:
-  method: tmp
-
-pigdmconditioning:
-  method: pig
-
-data:
-  name: ffhq
-  root: ./data/samples/
-
+    scale: 0.3
+    
 measurement:
   operator:
     name: motion_blur
@@ -21,4 +11,4 @@ measurement:
 
   noise: 
     name: gaussian
-    sigma: 0.1
+    sigma: 0.05

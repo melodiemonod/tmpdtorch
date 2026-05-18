@@ -7,3 +7,8 @@ data/imagenet
 assets/*
 label/
 .DS_Store
+.vscode/*
+__pycache__/*
+test.py
+test_sample_condition.py
+check.py

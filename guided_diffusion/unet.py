@@ -365,7 +365,7 @@ class AttentionBlock(nn.Module):
         self.proj_out = zero_module(conv_nd(1, channels, channels, 1))
 
     def forward(self, x):
-        return checkpoint(self._forward, (x,), self.parameters(), False)  # True!! TODO: I changed this to False (it was True), so memory requirement may be larger but now it is compatible with functorch!
+        return checkpoint(self._forward, (x,), self.parameters(), True)
 
     def _forward(self, x):
         b, c, *spatial = x.shape

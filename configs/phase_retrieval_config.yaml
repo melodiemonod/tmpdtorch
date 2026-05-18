@@ -1,17 +1,7 @@
-dpsconditioning:
+conditioning:
   method: ps
   params:
     scale: 1.0
-
-tmpdconditioning:
-  method: tmp
-
-pigdmconditioning:
-  method: pig
-
-data:
-  name: ffhq
-  root: ./data/samples/
 
 measurement:
   operator:
@@ -20,4 +10,4 @@ measurement:
 
   noise: 
     name: gaussian
-    sigma: 0.01
+    sigma: 0.05

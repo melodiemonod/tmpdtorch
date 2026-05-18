@@ -1,6 +1,7 @@
 import math
 import os
 from functools import partial
+from turtle import distance
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -8,7 +9,6 @@ from tqdm.auto import tqdm
 
 from util.img_utils import clear_color
 from .posterior_mean_variance import get_mean_processor, get_var_processor
-
 
 
 __SAMPLER__ = {}
@@ -74,8 +74,8 @@ class GaussianDiffusion:
 
         alphas = 1.0 - self.betas
         self.alphas_cumprod = np.cumprod(alphas, axis=0)
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])  # This is what we need
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0) 
+        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])
+        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0)
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
@@ -168,7 +168,6 @@ class GaussianDiffusion:
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_sample_loop(self,
-                      config,
                       model,
                       x_start,
                       measurement,
@@ -181,26 +180,21 @@ class GaussianDiffusion:
         img = x_start
         device = x_start.device
 
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
 
+        pbar = tqdm(list(range(self.num_timesteps))[::-1])
         for idx in pbar:
             time = torch.tensor([idx] * img.shape[0], device=device)
             
             img = img.requires_grad_()
             out = self.p_sample(x=img, t=time, model=model)
-            # Out gives a tuple
+            v_n = 1.0 - 1.0 / (self.sqrt_recip_alphas_cumprod[time]**2 )
+            q_posterior_mean = partial(self.mean_processor.q_posterior_mean, t=time)
+
+            img, distance = measurement_cond_fn(x_prev = img, v_n = v_n, q_posterior_mean = q_posterior_mean, x_0_hat = out['pred_xstart'], measurement = measurement)
+            img += torch.exp(0.5 * out['log_variance']) * torch.randn_like(img)
             
-            # Give condition.
-            noisy_measurement = self.q_sample(measurement, t=time)
-
-            # TODO: how can we handle argument for different condition method?
-            img, distance = measurement_cond_fn(x_t=out['sample'],
-                                      measurement=measurement,
-                                      noisy_measurement=noisy_measurement,
-                                      x_prev=img,
-                                      x_0_hat=out['pred_xstart'])
             img = img.detach_()
-
+            
             pbar.set_postfix({'distance': distance.item()}, refresh=False)
             if record:
                 if idx % 10 == 0:
@@ -208,128 +202,7 @@ class GaussianDiffusion:
                     plt.imsave(file_path, clear_color(img))
 
         return img       
-
-    def tmpd_sample_loop(self,
-                         config,
-                         model,
-                         x_start,
-                         measurement,
-                         measurement_cond_fn,
-                         record,
-                         save_root):
-        img = x_start
-        device = x_start.device
-
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
-
-        for idx in pbar:
-            time = torch.tensor([idx] * img.shape[0], device=device)
-
-            img = img.requires_grad_()
-            m = self.sqrt_alphas_cumprod[time]
-            v = self.sqrt_one_minus_alphas_cumprod[time]**2
-            ratio = v / m
-
-            def estimate_x_0(x_t):
-                model_output = model(x_t, self._scale_timesteps(time))
-                # In the case of "learned" variance, model will give twice channels.
-                if model_output.shape[1] == 2 * x_t.shape[1]:
-                    model_output, model_var_values = torch.split(model_output, x_t.shape[1], dim=1)
-                else:
-                    model_var_values = model_output
-                # Need to extract correct eps
-                return self.mean_processor.predict_xstart(x_t, time, model_output), model_var_values
-
-            x_0, distance, model_var_values = measurement_cond_fn(
-                img, measurement, estimate_x_0, ratio, v, config['noise']['sigma'])
-
-            model_mean = self.mean_processor.q_posterior_mean(x_0, x_t=img, t=time)
-            _, model_log_variance = self.var_processor.get_variance(model_var_values, t=time)
-
-            sample = model_mean
-
-            noise = torch.randn_like(img)
-            if time != 0:  # no noise when t == 0
-                sample += torch.exp(0.5 * model_log_variance) * noise
-
-            img = sample
-            img = img.detach_()
-
-            pbar.set_postfix({'distance': distance.item()}, refresh=False)
-            if record:
-                if idx % 10 == 0:
-                    file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(img))
-
-        return img
-
-    def pigdm_sample_loop(self,
-                         config,  # TODO: can probably remove this
-                         model,
-                         x_start,
-                         measurement,
-                         measurement_cond_fn,
-                         record,
-                         save_root):
-        img = x_start
-        device = x_start.device
-        eta = 1.
-
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
-        for idx in pbar:
-            time = torch.tensor([idx] * img.shape[0], device=device)
-
-            img = img.requires_grad_()
-
-            m = self.sqrt_alphas_cumprod[time]
-            v = self.sqrt_one_minus_alphas_cumprod[time]**2
-            ratio = v / m
-            alpha_bar = extract_and_expand(self.alphas_cumprod, time, img)
-            alpha_bar_prev = extract_and_expand(self.alphas_cumprod_prev, time, img)
-            coef1 = extract_and_expand(self.sqrt_recip_alphas_cumprod, time, img)
-            coef2 = extract_and_expand(self.sqrt_recipm1_alphas_cumprod, time, img)
-
-            sigma = (
-                eta
-                * torch.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar))
-                * torch.sqrt(1 - alpha_bar / alpha_bar_prev)
-            )
-
-            def estimate_x_0(x_t):
-                model_output = model(x_t, self._scale_timesteps(time))
-                if model_output.shape[1] == 2 * x_t.shape[1]:
-                    model_output, _ = torch.split(model_output, x_t.shape[1], dim=1)
-                pred_xstart = self.mean_processor.process_xstart(self.mean_processor.predict_xstart(x_t, time, model_output))
-                eps = (coef1 * x_t - pred_xstart) / coef2
-                # In the case of "learned" variance, model will give twice channels.
-                # Need to extract correct eps
-                return pred_xstart, eps
-
-            x_0, eps, ls, distance = measurement_cond_fn(
-                img, measurement, estimate_x_0, ratio, v, config['noise']['sigma'])
-
-            # Equation 12.
-            noise = torch.randn_like(img)
-            sample = (
-                x_0 * torch.sqrt(alpha_bar_prev)
-                + torch.sqrt(1 - alpha_bar_prev - sigma ** 2) * eps
-                + ls * torch.sqrt(alpha_bar)
-            )
-
-            if time != 0:  # no noise when t == 0
-                sample += sigma * noise
-
-            img = sample
-            img = img.detach_()
-
-            pbar.set_postfix({'distance': distance.item()}, refresh=False)
-            if record:
-                if idx % 10 == 0:
-                    file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(img))
-
-        return img
-
+        
     def p_sample(self, model, x, t):
         raise NotImplementedError
 
@@ -349,14 +222,13 @@ class GaussianDiffusion:
         model_variance, model_log_variance = self.var_processor.get_variance(model_var_values, t)
 
         assert model_mean.shape == model_log_variance.shape == pred_xstart.shape == x.shape
-        # I am very confused how the model output can be the mean?
-        # What exactly is model_output seems to be the mean of next x_t, but that can't be the case.
 
         return {'mean': model_mean,
                 'variance': model_variance,
                 'log_variance': model_log_variance,
                 'pred_xstart': pred_xstart}
 
+    
     def _scale_timesteps(self, t):
         if self.rescale_timesteps:
             return t.float() * (1000.0 / self.num_timesteps)
@@ -393,7 +265,7 @@ def space_timesteps(num_timesteps, section_counts):
         section_counts = [int(x) for x in section_counts.split(",")]
     elif isinstance(section_counts, int):
         section_counts = [section_counts]
- 
+    
     size_per = num_timesteps // len(section_counts)
     extra = num_timesteps % len(section_counts)
     start_idx = 0
@@ -485,60 +357,26 @@ class _WrappedModel:
         return self.model(x, new_ts, **kwargs)
 
 
-# @register_sampler(name='tmpd')
-# class TMPD(SpacedDiffusion):
-
-#     def p_mean_variance(
-#         self, model, *args, **kwargs
-#     ):  # pylint: disable=signature-differs
-#         return super().p_mean_variance(self._wrap_model(model), *args, **kwargs)
-
-#     def get_eval_function(self, model, x, t):
-#         # get the function to take vjp wrt
-#         def estimate_h_x_0(x, t):
-#             model_output = model(x, self._scale_timesteps(t))
-
-#             # In the case of "learned" variance, model will give twice channels.
-#             if model_output.shape[1] == 2 * x.shape[1]:
-#                 model_output, model_var_values = torch.split(model_output, x.shape[1], dim=1)
-#             else:
-#                 # The name of variable is wrong.
-#                 # This will just provide shape information, and
-#                 # will not be used for calculating something important in variance.
-#                 model_var_values = model_output
-#             # TODO: Need to detatch gradient of variance values?
-
-#             return self.mean_processor.predict_xstart(x, t, model_output)
-
-#         return estimate_h_x_0
-
-
 @register_sampler(name='ddpm')
 class DDPM(SpacedDiffusion):
     def p_sample(self, model, x, t):
         out = self.p_mean_variance(model, x, t)
-
-        # out =
-        #     {'mean': model_mean, but what is the model mean?
-        #     'variance': model_variance,
-        #     'log_variance': model_log_variance,
-        #     'pred_xstart': pred_xstart}
         sample = out['mean']
 
         noise = torch.randn_like(x)
         if t != 0:  # no noise when t == 0
             sample += torch.exp(0.5 * out['log_variance']) * noise
 
-        return {'sample': sample, 'pred_xstart': out['pred_xstart']}
+        return {'sample': sample, 'pred_xstart': out['pred_xstart'], "log_variance": out['log_variance']}
     
 
 @register_sampler(name='ddim')
 class DDIM(SpacedDiffusion):
     def p_sample(self, model, x, t, eta=0.0):
         out = self.p_mean_variance(model, x, t)
-
+        
         eps = self.predict_eps_from_x_start(x, t, out['pred_xstart'])
-
+        
         alpha_bar = extract_and_expand(self.alphas_cumprod, t, x)
         alpha_bar_prev = extract_and_expand(self.alphas_cumprod_prev, t, x)
         sigma = (
@@ -556,7 +394,7 @@ class DDIM(SpacedDiffusion):
         sample = mean_pred
         if t != 0:
             sample += sigma * noise
-
+        
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
     def predict_eps_from_x_start(self, x_t, t, pred_xstart):

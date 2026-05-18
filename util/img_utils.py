@@ -3,6 +3,8 @@ import torch
 import scipy
 import torch.nn.functional as F
 from torch import nn
+from contextlib import contextmanager
+
 from torch.autograd import Variable
 import matplotlib.pyplot as plt
 from motionblur.motionblur import Kernel
@@ -37,11 +39,20 @@ def ifft2_m(x):
   return torch.view_as_complex(ifft2c_new(torch.view_as_real(x)))
 
 
-def to_numpy(x):
-    x = x.detach().cpu().squeeze().numpy()
-    print(x.min())
-    print(x.max())
-    return np.clip(np.transpose(x, (1, 2, 0)), a_min=0., a_max=1.)
+@contextmanager
+def temp_seed(seed):
+    if seed is None:
+        yield
+        return
+
+    # numpy
+    state = np.random.get_state()
+    np.random.seed(seed)
+    
+    try:
+        yield
+    finally:
+        np.random.set_state(state)
 
 
 def clear(x):
@@ -222,17 +233,18 @@ class mask_generator:
         mask[:, ...] = mask_b
         return mask
 
-    def __call__(self, img):
-        if self.mask_type == 'random':
-            mask = self._retrieve_random(img)
-            return mask
-        elif self.mask_type == 'box':
-            mask, t, th, w, wl = self._retrieve_box(img)
-            return mask
-        elif self.mask_type == 'extreme':
-            mask, t, th, w, wl = self._retrieve_box(img)
-            mask = 1. - mask
-            return mask
+    def __call__(self, img, seed):
+        with temp_seed(seed):
+            if self.mask_type == 'random':
+                mask = self._retrieve_random(img)
+                return mask
+            elif self.mask_type == 'box':
+                mask, t, th, w, wl = self._retrieve_box(img)
+                return mask
+            elif self.mask_type == 'extreme':
+                mask, t, th, w, wl = self._retrieve_box(img)
+                mask = 1. - mask
+                return mask
 
 def unnormalize(img, s=0.95):
     scaling = torch.quantile(img.abs(), s)
@@ -293,14 +305,6 @@ class Blurkernel(nn.Module):
                 f.data.copy_(k)
         elif self.blur_type == "motion":
             k = Kernel(size=(self.kernel_size, self.kernel_size), intensity=self.std).kernelMatrix
-            k = torch.from_numpy(k)
-            self.k = k
-            for name, f in self.named_parameters():
-                f.data.copy_(k)
-        elif self.blur_type == "uniform":
-            n = np.zeros((self.kernel_size, self.kernel_size))
-            n[self.kernel_size // 2,self.kernel_size // 2] = 1
-            k = scipy.ndimage.uniform_filter(n, size=self.kernel_size)
             k = torch.from_numpy(k)
             self.k = k
             for name, f in self.named_parameters():

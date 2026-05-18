@@ -1,36 +1,56 @@
-torch port of [Tweedie Moment Projected Diffusions for Inverse Problems](https://openreview.net/pdf?id=4unJi0qrTE)
-========================================================
-This is a pytorch port of the [JAX implementation](https://github.com/bb515/tmpdjax) (the JAX implementation is faster and more comprehensive). This repo contains the Torch implementation for the paper [Tweedie Moment Projected Diffusions for Inverse Problems](https://openreview.net/pdf?id=4unJi0qrTE). An example of an application to a particular inverse problem, noisy super-resolution on FFHQ is below. The animation is of the expected value of a particular sample of an image over the time steps of our algorithm.
+# Diffusion Posterior Sampling for General Noisy Inverse Problems (ICLR 2023 spotlight)
 
-![cover-img1](./readme_FFHQ_0.05.png)
+![result-gif1](./figures/motion_blur.gif)
+![result-git2](./figures/super_resolution.gif)
+<!-- See more results in the [project-page](https://jeongsol-kim.github.io/dps-project-page) -->
 
-![nPlan](readme_nplan.png)
+## Abstract
+In this work, we extend diffusion solvers to efficiently handle general noisy (non)linear inverse problems via the approximation of the posterior sampling. Interestingly, the resulting posterior sampling scheme is a blended version of the diffusion sampling with the manifold constrained gradient without strict measurement consistency projection step, yielding more desirable generative path in noisy settings compared to the previous studies.
 
-Thank you to [nPlan](https://www.nplan.io/), who are supporting this project.
+![cover-img](./figures/cover.jpg)
 
-Contents:
-- [Installation](#installation)
-- [Examples](#examples)
-- [References](#references)
 
-## Installation
-The package requires Python 3.8+. First, it is recommended to [create a new python virtual environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands). 
-tmpdtorch depends on
+## Prerequisites
+- python 3.8
+
 - pytorch 1.11.0
+
 - CUDA 11.3.1
+
 - nvidia-docker (if you use GPU in docker container)
-It is okay to use lower version of CUDA with proper pytorch version, e.g., CUDA 10.2 with pytorch 1.7.0. Then,
-- Clone the repository `git clone https://github.com/bb515/tmpdtorch`
-- Install using `pip install -e .` from the root directory of the repository (see the `setup.py` for the requirements that this command installs).
-- Download the pretrained checkpoint for FFHQ and/or ImageNet from the [link](https://drive.google.com/drive/folders/1jElnRoFv7b31fG0v6pTSQkelbSX3xGZh?usp=sharing), download the checkpoint "ffhq_10m.pt" and paste it to ./models/
+
+It is okay to use lower version of CUDA with proper pytorch version.
+
+Ex) CUDA 10.2 with pytorch 1.7.0
+
+<br />
+
+## Getting started 
+
+### 1) Clone the repository
+
+```
+git clone https://github.com/DPS2022/diffusion-posterior-sampling
+
+cd diffusion-posterior-sampling
+```
+
+<br />
+
+### 2) Download pretrained checkpoint
+From the [link](https://drive.google.com/drive/folders/1jElnRoFv7b31fG0v6pTSQkelbSX3xGZh?usp=sharing), download the checkpoint "ffhq_10m.pt" and paste it to ./models/
 ```
 mkdir models
 mv {DOWNLOAD_DIR}/ffqh_10m.pt ./models/
 ```
 {DOWNLOAD_DIR} is the directory that you downloaded checkpoint to.
 
-Set environment
+:speaker: Checkpoint for imagenet is uploaded.
 
+<br />
+
+
+### 3) Set environment
 ### [Option 1] Local environment setting
 
 We use the external codes for motion-blurring and non-linear deblurring.
@@ -50,7 +70,7 @@ conda activate DPS
 
 pip install -r requirements.txt
 
-pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 functorch==0.2.1 --extra-index-url https://download.pytorch.org/whl/cu113
+pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
 ```
 
 <br />
@@ -71,30 +91,21 @@ docker run -it --rm --gpus=all dps-docker
 
 <br />
 
-## Examples
-
-### Noisy inpainting, super resolution and deblur
+### 4) Inference
 
 ```
 python3 sample_condition.py \
---config \
 --model_config=configs/model_config.yaml \
 --diffusion_config=configs/diffusion_config.yaml \
 --task_config={TASK-CONFIG};
 ```
-e.g., 
 
-```
-python3 sample_condition.py --config ./configs/ve/ffhq_256_ncsnpp_continuous.py --model_config=configs/model_config.yaml --diffusion_config=configs/diffusion_config.yaml --task_config=configs/super_resolution_config.yaml
-```
 
-on the command line from the root directory of the repository.
-* `config` is the path to the config file. The default config files are provided in `configs/`. They are formatted according to [`ml_collections`](https://github.com/google/ml_collections).
-* `model_config` :speaker: For imagenet, use configs/imagenet_model_config.yaml
-* `diffusion_config`
-* `task_config`
+:speaker: For imagenet, use configs/imagenet_model_config.yaml
 
-#### Possible task configurations
+<br />
+
+## Possible task configurations
 
 ```
 # Linear inverse problems
@@ -108,7 +119,7 @@ on the command line from the root directory of the repository.
 - configs/phase_retrieval_config.yaml
 ```
 
-#### Structure of task configurations
+### Structure of task configurations
 You need to write your data directory at data.root. Default is ./data/samples which contains three sample images from FFHQ validation set.
 
 ```
@@ -131,5 +142,17 @@ noise:
     (rate:) # if you use name: poisson, set this.
 ```
 
-## References
-This repository is a fork of [diffusion posterior sampling](https://github.com/DPS2022/diffusion-posterior-sampling/tree/main). 
+## Citation
+If you find our work interesting, please consider citing
+
+```
+@inproceedings{
+chung2023diffusion,
+title={Diffusion Posterior Sampling for General Noisy Inverse Problems},
+author={Hyungjin Chung and Jeongsol Kim and Michael Thompson Mccann and Marc Louis Klasky and Jong Chul Ye},
+booktitle={The Eleventh International Conference on Learning Representations },
+year={2023},
+url={https://openreview.net/forum?id=OnD9zGAGT0k}
+}
+```
+

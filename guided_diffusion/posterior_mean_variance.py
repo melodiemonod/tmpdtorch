@@ -95,7 +95,6 @@ class StartXMeanProcessor(MeanProcessor):
 
 @register_mean_processor(name='epsilon')
 class EpsilonXMeanProcessor(MeanProcessor):
-    """NOTE: This is the mean type used in diffusion samplers"""
     def __init__(self, betas, dynamic_threshold, clip_denoised):
         super().__init__(betas, dynamic_threshold, clip_denoised)
         alphas = 1.0 - betas
@@ -106,6 +105,7 @@ class EpsilonXMeanProcessor(MeanProcessor):
         self.sqrt_recipm1_alphas_cumprod = np.sqrt(1.0 / alphas_cumprod - 1)
         self.posterior_mean_coef1 = betas * np.sqrt(alphas_cumprod_prev) / (1.0-alphas_cumprod)
         self.posterior_mean_coef2 = (1.0 - alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - alphas_cumprod)
+
 
     def q_posterior_mean(self, x_start, x_t, t):
         """
