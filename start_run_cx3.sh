@@ -2,9 +2,10 @@
 
 N=200  # number of jobs you want to launch
 
+METHOD="TMPD"
 DATANAME="imagenet"
 OPERTORNAME="inpainting"
-BASE_JOBID="${DATANAME}/${OPERTORNAME}"
+BASE_JOBID="${METHOD}/${DATANAME}/${OPERTORNAME}"
 
 REPO_DIR="/rds/general/user/mm3218/home/git/tmpdtorch"
 SAVE_DIR="/rds/general/user/mm3218/home/projects/2026/dps_sbc/${BASE_JOBID}"
