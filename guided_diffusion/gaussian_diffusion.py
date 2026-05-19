@@ -188,12 +188,9 @@ class GaussianDiffusion:
             img = img.requires_grad_()
             out = self.p_sample(x=img, t=time, model=model)
             v_n = 1 - self.alphas_cumprod[time]
-            q_posterior_mean = partial(self.mean_processor.q_posterior_mean, t=time)
 
-            img, distance = measurement_cond_fn(x_prev = img, v_n = v_n, q_posterior_mean = q_posterior_mean, x_0_hat = out['pred_xstart'], measurement = measurement)
-            if time != 0:
-                img += torch.exp(0.5 * out['log_variance']) * torch.randn_like(img)
-            
+            img, distance = measurement_cond_fn(x_t=out['sample'],x_prev = img, v_n = v_n, x_0_hat = out['pred_xstart'], measurement = measurement)
+
             img = img.detach_()
             
             pbar.set_postfix({'distance': distance.item()}, refresh=False)

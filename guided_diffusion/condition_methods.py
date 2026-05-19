@@ -80,7 +80,7 @@ class PosteriorSampling(ConditioningMethod):
         super().__init__(operator, noiser)
         self.scale = kwargs.get('scale', 1.0)
 
-    def conditioning(self, x_prev, v_n, q_posterior_mean, x_0_hat, measurement, **kwargs):
+    def conditioning(self, x_t, x_prev, v_n, x_0_hat, measurement, **kwargs):
         
         sigma_y = measurement.std().item() ** 2
 
@@ -126,19 +126,16 @@ class PosteriorSampling(ConditioningMethod):
         sqrt_alpha_n = np.sqrt(1 - v_n)
         part_2 = cg(yadj, v_n / sqrt_alpha_n * grad, iters=10)
 
-        # part 1 = (v_n / sqrt(alpha_n) H ∇xnm0|t H^T part_2
-        part_1 = v_n / sqrt_alpha_n * grad * self.operator.transpose(part_2, **kwargs)
-        
-        # pred_xstart_y = m0|t + part_1
-        pred_xstart_y = x_0_hat + part_1
+        # part 1 =  ∇xnm0|t H^T part_2
+        part_1 = grad * self.operator.transpose(part_2, **kwargs)
         
         # predict with ddpm
-        img = q_posterior_mean(x_t = x_prev, x_start = pred_xstart_y)
+        x_t += part_1
         
         # calculate distance
-        distance = torch.linalg.norm(measurement - self.operator.forward(pred_xstart_y, **kwargs)) 
+        distance = torch.linalg.norm(measurement - self.operator.forward(x_0_hat, **kwargs)) 
         
-        return img, distance
+        return x_t, distance
         
 @register_conditioning_method(name='ps+')
 class PosteriorSamplingPlus(ConditioningMethod):
