@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from sympy import denom
 import torch
 import numpy as np
 
