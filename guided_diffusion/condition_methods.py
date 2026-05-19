@@ -90,7 +90,7 @@ class PosteriorSampling(ConditioningMethod):
             HXHt_v = self.operator.forward(X_Ht_v, **kwargs) # H X H^T v
             return HXHt_v + sigma_y * v       # (H X H^T + σI)v
 
-        def cg(A, b, x, iters=10):
+        def cg(b, x, iters=20):
             z = torch.zeros_like(b)
 
             r = b - A(z, x)
@@ -124,7 +124,7 @@ class PosteriorSampling(ConditioningMethod):
         
         # part_2 = (v_n / sqrt(alpha_n) H ∇xnm0|t H^T + sigma_y^2 I)^-1 (y − Hm0|t)
         sqrt_alpha_n = np.sqrt(1 - v_n)
-        part_2 = cg(A, yadj, v_n / sqrt_alpha_n * grad, iters=10)
+        part_2 = cg(yadj, v_n / sqrt_alpha_n * grad, iters=10)
 
         # part 1 = (v_n / sqrt(alpha_n) H ∇xnm0|t H^T part_2
         part_1 = v_n / sqrt_alpha_n * grad * self.operator.transpose(part_2, **kwargs)
