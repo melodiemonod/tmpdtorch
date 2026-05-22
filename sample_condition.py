@@ -144,10 +144,11 @@ def main():
         np.save(os.path.join(out_path, 'recon', fname), recon_arr)
 
         # save images
-        fname = str(i).zfill(5) + '.png'
-        plt.imsave(os.path.join(out_path, 'input', fname), input_arr)
-        plt.imsave(os.path.join(out_path, 'label', fname), label_arr)
-        plt.imsave(os.path.join(out_path, 'recon', fname), recon_arr)
+        if i < 5: # save images for the first 5 samples
+            fname = str(i).zfill(5) + '.png'
+            plt.imsave(os.path.join(out_path, 'input', fname), input_arr)
+            plt.imsave(os.path.join(out_path, 'label', fname), label_arr)
+            plt.imsave(os.path.join(out_path, 'recon', fname), recon_arr)
 
         end_time = time.time()
         elapsed = end_time - start_time
