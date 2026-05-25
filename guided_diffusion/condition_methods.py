@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from sympy import denom
 import torch
 import numpy as np
 
@@ -83,53 +84,29 @@ class PosteriorSampling(ConditioningMethod):
     def conditioning(self, x_prev, v_n, q_posterior_mean, x_0_hat, measurement, **kwargs):
         
         sigma_y = measurement.std().item() ** 2
+        sqrt_alpha_n = np.sqrt(1.0 - v_n)
 
-        def A(v, x):
-            Ht_v = self.operator.transpose(v, **kwargs)      # H^T v
-            X_Ht_v = x * Ht_v                 # X H^T v (diagonal X)
-            HXHt_v = self.operator.forward(X_Ht_v, **kwargs) # H X H^T v
-            return HXHt_v + sigma_y * v       # (H X H^T + σI)v
+        # diagonal Jacobian approximation (∇x_t m0|t)
+        J_diag = torch.autograd.grad(
+            outputs=x_0_hat,
+            inputs=x_prev,
+            grad_outputs=torch.ones_like(x_0_hat)
+        )[0]
 
-        def cg(b, x, iters=20):
-            z = torch.zeros_like(b)
-
-            r = b - A(z, x)
-            p = r.clone()
-            rs_old = (r * r).sum()
-
-            for _ in range(iters):
-                Ap = A(p, x)
-
-                denom = (p * Ap).sum() + 1e-8
-                alpha = rs_old / denom
-
-                z = z + alpha * p
-                r = r - alpha * Ap
-
-                rs_new = (r * r).sum()
-
-                if rs_new < 1e-8:
-                    break
-
-                p = r + (rs_new / rs_old) * p
-                rs_old = rs_new
-
-            return z
-
-        # ∇xnm0|t
-        grad = torch.autograd.grad(outputs=x_0_hat, grad_outputs=torch.ones_like(x_0_hat), inputs=x_prev)[0]
-
-        # y − Hm0|t
+        # # residual: y − Hm0|t
         yadj = measurement - self.operator.forward(x_0_hat, **kwargs)
-        
-        # part_2 = (v_n / sqrt(alpha_n) H ∇xnm0|t H^T + sigma_y^2 I)^-1 (y − Hm0|t)
-        sqrt_alpha_n = np.sqrt(1 - v_n)
-        part_2 = cg(yadj, v_n / sqrt_alpha_n * grad, iters=10)
 
-        # part 1 = (v_n / sqrt(alpha_n) H ∇xnm0|t H^T part_2
-        part_1 = v_n / sqrt_alpha_n * grad * self.operator.transpose(part_2, **kwargs)
+        # approximate denominator (NO CG)
+        Ht_one = self.operator.transpose(torch.ones_like(yadj), **kwargs)
+        HdHt = self.operator.forward(J_diag * Ht_one, **kwargs)
+        denom = HdHt + sigma_y
+
+        # inverse approximation
+        z = yadj / (denom + 1e-8)
         
-        # pred_xstart_y = m0|t + part_1
+        # final correction
+        part_1 = (v_n / sqrt_alpha_n) * J_diag * self.operator.transpose(z, **kwargs)
+                
         pred_xstart_y = x_0_hat + part_1
         
         # predict with ddpm
