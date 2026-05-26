@@ -82,7 +82,7 @@ class PosteriorSampling(ConditioningMethod):
 
     def conditioning(self, x_prev, v_n, q_posterior_mean, x_0_hat, measurement, **kwargs):
         
-        sigma_y = measurement.std().item() ** 2
+        sigma_y = 0.05 ** 2
         sqrt_alpha_n = np.sqrt(1.0 - v_n)
 
         # diagonal Jacobian approximation (∇x_t m0|t)
