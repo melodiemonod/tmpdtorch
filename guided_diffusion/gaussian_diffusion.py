@@ -167,6 +167,60 @@ class GaussianDiffusion:
         )
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
+    def tmpd_sample_loop(self,
+                         config,
+                         model,
+                         x_start,
+                         measurement,
+                         measurement_cond_fn,
+                         record,
+                         save_root):
+        img = x_start
+        device = x_start.device
+
+        pbar = tqdm(list(range(self.num_timesteps))[::-1])
+
+        for idx in pbar:
+            time = torch.tensor([idx] * img.shape[0], device=device)
+
+            img = img.requires_grad_()
+            m = self.sqrt_alphas_cumprod[time]
+            v = self.sqrt_one_minus_alphas_cumprod[time]**2
+            ratio = v / m
+
+            def estimate_x_0(x_t):
+                model_output = model(x_t, self._scale_timesteps(time))
+                # In the case of "learned" variance, model will give twice channels.
+                if model_output.shape[1] == 2 * x_t.shape[1]:
+                    model_output, model_var_values = torch.split(model_output, x_t.shape[1], dim=1)
+                else:
+                    model_var_values = model_output
+                # Need to extract correct eps
+                return self.mean_processor.predict_xstart(x_t, time, model_output), model_var_values
+
+            x_0, distance, model_var_values = measurement_cond_fn(
+                img, measurement, estimate_x_0, ratio, v, config['noise']['sigma'])
+
+            model_mean = self.mean_processor.q_posterior_mean(x_0, x_t=img, t=time)
+            _, model_log_variance = self.var_processor.get_variance(model_var_values, t=time)
+
+            sample = model_mean
+
+            noise = torch.randn_like(img)
+            if time != 0:  # no noise when t == 0
+                sample += torch.exp(0.5 * model_log_variance) * noise
+
+            img = sample
+            img = img.detach_()
+
+            pbar.set_postfix({'distance': distance.item()}, refresh=False)
+            if record:
+                if idx % 10 == 0:
+                    file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
+                    plt.imsave(file_path, clear_color(img))
+
+        return img
+    
     def p_sample_loop(self,
                       model,
                       x_start,
@@ -187,6 +241,7 @@ class GaussianDiffusion:
             
             img = img.requires_grad_()
             out = self.p_sample(x=img, t=time, model=model)
+            
             v_n = 1 - self.alphas_cumprod[time]
             q_posterior_mean = partial(self.mean_processor.q_posterior_mean, t=time)
 

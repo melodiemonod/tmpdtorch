@@ -71,7 +71,7 @@ def main():
    
     # Load diffusion sampler
     sampler = create_sampler(**diffusion_config) 
-    sample_fn = partial(sampler.p_sample_loop, model=model, measurement_cond_fn=measurement_cond_fn)
+    sample_fn = partial(sampler.tmpd_sample_loop, model=model, measurement_cond_fn=measurement_cond_fn, config=measure_config)
    
     # Working directory
     out_path = args.save_dir

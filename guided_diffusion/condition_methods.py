@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import torch
 import numpy as np
+import functorch
 
 __CONDITIONING_METHOD__ = {}
 
@@ -135,3 +136,55 @@ class PosteriorSamplingPlus(ConditioningMethod):
         norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
         x_t -= norm_grad * self.scale
         return x_t, norm
+
+
+@register_conditioning_method(name="tmp")
+class TweedieMomentProjection(ConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        self.num_sampling = kwargs.get("num_sampling", 5)
+        # self.scale = kwargs.get('scale', 1.0)
+
+    def conditioning(self, x_t, measurement, estimate_x_0, r, v, noise_std, **kwargs):
+        def estimate_h_x_0(x_t):
+            x_0, model_var_values = estimate_x_0(x_t)
+            return self.operator.forward(x_0, **kwargs), (x_0, model_var_values)
+            # return self.operator.forward(x_0, **kwargs)
+
+        if self.noiser.__name__ == "gaussian":
+            # Due to the structure of this code, the condition operator is not accesible unless inside from in the conditioning method. That's why the analysis is here
+            # Since functorch 1.1.1 is not compatible with this
+            # functorch 0.1.1 (unstable; works with PyTorch 1.11) does not work with autograd.Function, which is what the model is written in. It can be rewritten, or package environment needs to be solved.
+            # h_x_0, vjp = torch.autograd.functional.vjp(estimate_h_x_0, x_t, self.operator.forward(torch.ones_like(x_t), **kwargs))
+            # difference = measurement - h_x_0
+            # norm = torch.linalg.norm(difference)
+            # C_yy = self.operator.forward(vjp, **kwargs) + noise_std**2 / ratio
+            # _, ls = torch.autograd.functional.vjp(estimate_h_x_0, x_t, difference / C_yy)
+            # x_0 = estimate_x_0(x_t)
+
+            # NOTE: This standing functorch way seems to be only slightly faster (163 seconds instead of 188 seconds)
+            # NOTE: In torch, usually our method is up to 2x slower than dps due to the extra vjp
+            # # h_x_0, vjp_estimate_h_x_0, x_0 = torch.func.vjp(estimate_h_x_0, x_t, has_aux=True)
+            h_x_0, vjp_estimate_h_x_0, (x_0, model_var_values) = functorch.vjp(
+                estimate_h_x_0, x_t, has_aux=True
+            )
+            C_yy = (
+                self.operator.forward(
+                    vjp_estimate_h_x_0(
+                        self.operator.forward(torch.ones_like(x_0), **kwargs)
+                    )[0],
+                    **kwargs,
+                )
+                + noise_std**2 / r
+            )
+            difference = measurement - h_x_0
+            norm = torch.linalg.norm(difference)
+            ls = vjp_estimate_h_x_0(difference / C_yy)[0]
+            del C_yy
+
+            x_0 = x_0 + ls  # commenting it out shows that rest of the code works
+            del ls
+        else:
+            raise NotImplementedError
+
+        return x_0, norm, model_var_values
