@@ -1,19 +1,19 @@
 #!/bin/bash
 
-N=200  # number of jobs you want to launch
+N=100  # number of jobs you want to launch
 
 METHOD="TMPD"
-DATANAME="imagenet"
+DATANAME="ffhq"
 OPERTORNAME="inpainting"
 BASE_JOBID="${METHOD}/${DATANAME}/${OPERTORNAME}"
 
 REPO_DIR="/gpfs/home/mm3218/git/tmpdtorch"
 SAVE_DIR="/gpfs/home/mm3218/projects/2026/dps_sbc/${BASE_JOBID}"
 
-data_config=$REPO_DIR/configs/ffhq_data_config.yaml
-model_config=$REPO_DIR/configs/ffhq_model_config.yaml
+data_config=$REPO_DIR/configs/${DATANAME}_data_config.yaml
+model_config=$REPO_DIR/configs/${DATANAME}_model_config.yaml
 diffusion_config=$REPO_DIR/configs/diffusion_config.yaml
-task_config=$REPO_DIR/configs/inpainting_config.yaml
+task_config=$REPO_DIR/configs/${OPERTORNAME}_config.yaml
 
 mkdir -p $SAVE_DIR
 
@@ -28,7 +28,7 @@ for i in $(seq 1 $N); do
     cat > $job_script <<EOF
 #!/bin/sh
 #PBS -N dps_${i}
-#PBS -l walltime=72:00:00
+#PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=1:mem=100gb:ngpus=1
 #PBS -j oe
 
@@ -67,7 +67,7 @@ for i in $(seq 1 $((N / 50))); do
     cat > $job_script <<EOF
 #!/bin/sh
 #PBS -N dps_${start_index}-${end_index}
-#PBS -l walltime=72:00:00
+#PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=1:mem=100gb:ngpus=1
 #PBS -J ${start_index}-${end_index}
 #PBS -j oe
