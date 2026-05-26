@@ -84,6 +84,7 @@ class PosteriorSampling(ConditioningMethod):
         
         sigma_y = 0.05 ** 2
         sqrt_alpha_n = np.sqrt(1.0 - v_n)
+        scale = 0.5
 
         # diagonal Jacobian approximation (∇x_t m0|t)
         J_diag = torch.autograd.grad(
@@ -106,7 +107,7 @@ class PosteriorSampling(ConditioningMethod):
         # final correction
         part_1 = (v_n / sqrt_alpha_n) * J_diag * self.operator.transpose(z, **kwargs)
                 
-        pred_xstart_y = x_0_hat + part_1
+        pred_xstart_y = x_0_hat + scale * part_1
         
         # predict with ddpm
         img = q_posterior_mean(x_t = x_prev, x_start = pred_xstart_y)
