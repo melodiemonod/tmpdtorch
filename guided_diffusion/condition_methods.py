@@ -98,7 +98,7 @@ class PosteriorSampling(ConditioningMethod):
         # approximate denominator (NO CG)
         Ht_one = self.operator.transpose(torch.ones_like(yadj), **kwargs)
         HdHt = self.operator.forward(J_diag * Ht_one, **kwargs)
-        denom = HdHt + sigma_y
+        denom = (v_n / sqrt_alpha_n) * HdHt + sigma_y
 
         # inverse approximation
         z = yadj / (denom + 1e-8)
