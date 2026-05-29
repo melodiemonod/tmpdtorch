@@ -1,5 +1,5 @@
 conditioning:
-  method: ps
+  method: tmp
   params:
     scale: 1.0
 

@@ -1,4 +1,4 @@
 name: ffhq
 root: /Users/Monod/git/tmpdtorch/data/samples
-num_samples: 3
+num_samples: 1000
 seed: 42
