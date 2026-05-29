@@ -33,7 +33,7 @@ for i in $(seq 1 $N); do
 #PBS -j oe
 
 eval "\$(/gpfs/home/mm3218/miniforge3/bin/conda shell.bash hook)"
-conda activate DPS
+conda activate tmpdtorch
 
 REPO_DIR="$REPO_DIR"
 data_config="$data_config"
@@ -73,7 +73,7 @@ for i in $(seq 1 $((N / 50))); do
 #PBS -j oe
 
 eval "\$(/gpfs/home/mm3218/miniforge3/bin/conda shell.bash hook)"
-conda activate DPS
+conda activate tmpdtorch
 
 REPO_DIR="$REPO_DIR"
 data_config="$data_config"
