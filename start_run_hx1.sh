@@ -27,7 +27,7 @@ for i in $(seq 1 $N); do
 
     cat > $job_script <<EOF
 #!/bin/sh
-#PBS -N dps_${i}
+#PBS -N tmpd_${i}
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=1:mem=100gb:ngpus=1
 #PBS -j oe
@@ -66,7 +66,7 @@ for i in $(seq 1 $((N / 50))); do
 
     cat > $job_script <<EOF
 #!/bin/sh
-#PBS -N dps_${start_index}-${end_index}
+#PBS -N tmpd_${start_index}-${end_index}
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=1:mem=100gb:ngpus=1
 #PBS -J ${start_index}-${end_index}
